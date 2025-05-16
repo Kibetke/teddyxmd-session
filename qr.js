@@ -1,3 +1,4 @@
+const zlib = require('zlib'); // For compression
 const QRCode = require('qrcode');
 const express = require('express');
 const path = require('path');
@@ -11,6 +12,47 @@ const {
     delay 
 } = require("@whiskeysockets/baileys");
 
+// List of audio URLs
+const audioUrls = [
+    "https://files.catbox.moe/hpwsi2.mp3",
+    "https://files.catbox.moe/xci982.mp3",
+    "https://files.catbox.moe/utbujd.mp3",
+    // Add more audio URLs as needed
+];
+
+// List of video URLs
+const videoUrls = [
+    "https://i.imgur.com/Zuun5CJ.mp4",
+    "https://i.imgur.com/tz9u2RC.mp4",
+    "https://i.imgur.com/W7dm6hG.mp4",
+    // Add more video URLs as needed
+];
+
+// List of random facts and quotes
+const factsAndQuotes = [
+    "The only way to do great work is to love what you do. - Steve Jobs",
+    "Success is not final, failure is not fatal: It is the courage to continue that counts. - Winston Churchill",
+    // Add more quotes as needed
+];
+
+// Function to get a random audio URL
+function getRandomAudioUrl() {
+    const randomIndex = Math.floor(Math.random() * audioUrls.length);
+    return audioUrls[randomIndex];
+}
+
+// Function to get a random video URL
+function getRandomVideoUrl() {
+    const randomIndex = Math.floor(Math.random() * videoUrls.length);
+    return videoUrls[randomIndex];
+}
+
+// Function to get a random fact/quote
+function getRandomFactOrQuote() {
+    const randomIndex = Math.floor(Math.random() * factsAndQuotes.length);
+    return factsAndQuotes[randomIndex];
+}
+
 function removeFile(FilePath) {
     if (!fs.existsSync(FilePath)) return false;
     fs.rmSync(FilePath, { recursive: true, force: true });
@@ -18,14 +60,18 @@ function removeFile(FilePath) {
 
 router.get('/', async (req, res) => {
     const id = Date.now().toString(); // Use timestamp-based unique ID
+    
     async function BWM_XMD_QR_CODE() {
         const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
         try {
             let Qr_Code_By_Ibrahim_Adams = Ibrahim_Adams({
-                auth: state,
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+                },
                 printQRInTerminal: false,
-                logger: pino({ level: "silent" }),
-                browser: Browsers.macOS("Desktop"),
+                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
+                browser: Browsers.macOS("Desktop")
             });
 
             Qr_Code_By_Ibrahim_Adams.ev.on('creds.update', saveCreds);
@@ -39,30 +85,49 @@ router.get('/', async (req, res) => {
                 }
 
                 if (connection === "open") {
-                    await delay(5000);
+                    await delay(50000);
 
                     let data = fs.readFileSync(path.join(__dirname, `/temp/${id}/creds.json`));
-                    await delay(800);
-                    let b64data = Buffer.from(data).toString('base64');
-                    let sessionData = `BWM_XMD_SESSION:::${b64data}`;
+                    await delay(8000);
+                    
+                    // Compress and encode session data
+                    let compressedData = zlib.gzipSync(data); // Compress
+                    let b64data = compressedData.toString('base64'); // Base64 encode
+                    let sessionData = `KEITH;;;${b64data}`;
 
                     // Send session data
                     await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: sessionData });
 
-                    // Cool new message
-                    let BWM_XMD_TEXT = `
-🌟 *Session Connected!* 🌟  
-  
-- 🚀 Stay updated with new bot features!  
-- 🔗 Get support and explore more:  
-   - Github: _https://github.com/ibrahimaitech_  
-   - Website: _https://www.ibrahimadams.site_  
-   - Whatsappchannel: _https://whatsapp.com/channel/0029VaZuGSxEawdxZK9CzM0Y_
-   
-😎 _Made with ❤️ by Ibrahim Adams_
-`;
+                    // Get a random fact/quote
+                    let randomFactOrQuote = getRandomFactOrQuote();
+                    let randomVideoUrl = getRandomVideoUrl();
 
-                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: BWM_XMD_TEXT });
+                    // Send the video with caption
+                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { 
+                        video: { url: randomVideoUrl },
+                        caption: randomFactOrQuote 
+                    });
+
+                    // Send the random audio URL as a voice note
+                    const randomAudioUrl = getRandomAudioUrl();
+                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { 
+                        audio: { url: randomAudioUrl },
+                        mimetype: 'audio/mp4',
+                        ptt: true,
+                        waveform: [100, 0, 100, 0, 100, 0, 100],
+                        fileName: 'shizo',
+                        contextInfo: {
+                            mentionedJid: [Qr_Code_By_Ibrahim_Adams.user.id],
+                            externalAdReply: {
+                                title: 'Thanks for choosing 𝗞𝗲𝗶𝘁𝗵 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 happy deployment 💜',
+                                body: 'Regards Keithkeizzah',
+                                thumbnailUrl: 'https://i.imgur.com/vTs9acV.jpeg',
+                                sourceUrl: 'https://whatsapp.com/channel/0029Vaan9TF9Bb62l8wpoD47',
+                                mediaType: 1,
+                                renderLargerThumbnail: true,
+                            },
+                        },
+                    });
 
                     await delay(100);
                     await Qr_Code_By_Ibrahim_Adams.ws.close();
@@ -73,11 +138,11 @@ router.get('/', async (req, res) => {
                 }
             });
         } catch (err) {
+            console.log("service restarted");
+            await removeFile('./temp/' + id);
             if (!res.headersSent) {
                 await res.json({ code: "Service is Currently Unavailable" });
             }
-            console.log(err);
-            await removeFile('./temp/' + id);
         }
     }
 
