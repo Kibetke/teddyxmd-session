@@ -3,115 +3,158 @@ const QRCode = require('qrcode');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-let router = express.Router();
+const router = express.Router();
 const pino = require("pino");
 const { 
-    default: Ibrahim_Adams, 
+    default: makeWASocket, 
     useMultiFileAuthState, 
     Browsers, 
     delay,
     makeCacheableSignalKeyStore
 } = require("@whiskeysockets/baileys");
 
-// Enhanced compression function
-async function compressSessionData(data) {
-    return new Promise((resolve, reject) => {
-        zlib.gzip(data, (err, buffer) => {
-            if (err) return reject(err);
-            resolve(buffer.toString('base64'));
-        });
-    });
-}
+// Media content arrays
+const mediaContent = {
+    audioUrls: [
+        "https://files.catbox.moe/hpwsi2.mp3",
+        "https://files.catbox.moe/xci982.mp3",
+        "https://files.catbox.moe/utbujd.mp3",
+    ],
+    videoUrls: [
+        "https://i.imgur.com/Zuun5CJ.mp4",
+        "https://i.imgur.com/tz9u2RC.mp4",
+        "https://i.imgur.com/W7dm6hG.mp4",
+    ],
+    factsAndQuotes: [
+        "The only way to do great work is to love what you do. - Steve Jobs",
+        "Success is not final, failure is not fatal: It is the courage to continue that counts. - Winston Churchill",
+    ]
+};
 
-function removeFile(FilePath) {
-    if (!fs.existsSync(FilePath)) return false;
-    fs.rmSync(FilePath, { recursive: true, force: true });
-}
+// Helper functions
+const getRandomItem = (array) => array[Math.floor(Math.random() * array.length)];
+
+const removeFile = (filePath) => {
+    if (fs.existsSync(filePath)) {
+        fs.rmSync(filePath, { recursive: true, force: true });
+    }
+};
+
+const compressSessionData = (data) => {
+    try {
+        return zlib.gzipSync(data);
+    } catch (error) {
+        console.error("Compression error:", error);
+        throw new Error("Failed to compress session data");
+    }
+};
 
 router.get('/', async (req, res) => {
-    const id = Date.now().toString();
-    
-    async function BWM_XMD_QR_CODE() {
-        const { state, saveCreds } = await useMultiFileAuthState(`./temp/${id}`);
-        try {
-            let Qr_Code_By_Ibrahim_Adams = Ibrahim_Adams({
-                auth: {
-                    creds: state.creds,
-                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }))
-                },
-                printQRInTerminal: false,
-                logger: pino({ level: "silent" }),
-                browser: Browsers.macOS("Desktop"),
-            });
+    const sessionId = Date.now().toString();
+    const sessionDir = path.join(__dirname, 'temp', sessionId);
 
-            Qr_Code_By_Ibrahim_Adams.ev.on('creds.update', saveCreds);
-            Qr_Code_By_Ibrahim_Adams.ev.on("connection.update", async (update) => {
-                const { connection, lastDisconnect, qr } = update;
-
-                if (qr) {
-                    const qrImage = await QRCode.toDataURL(qr);
-                    return res.send(`
-                        <div style="text-align: center; padding: 20px;">
-                            <img src="${qrImage}" alt="QR Code" style="max-width: 300px;"/>
-                            <h2>Scan this QR code to connect</h2>
-                            <p>Session will automatically close after successful connection</p>
-                        </div>
-                    `);
-                }
-
-                if (connection === "open") {
-                    await delay(3000);
-                    const credsPath = path.join(__dirname, `./temp/${id}/creds.json`);
-                    const data = fs.readFileSync(credsPath);
-                    
-                    // Enhanced compression with error handling
-                    let compressedSession;
-                    try {
-                        compressedSession = await compressSessionData(data);
-                    } catch (compressErr) {
-                        console.error("Compression error:", compressErr);
-                        compressedSession = Buffer.from(data).toString('base64');
-                    }
-
-                    const sessionMessage = `KEITH;;;${compressedSession}`;
-                    
-                    // Send compressed session data
-                    await Qr_Code_By_Ibrahim_Adams.sendMessage(
-                        Qr_Code_By_Ibrahim_Adams.user.id, 
-                        { text: sessionMessage }
-                    );
-
-                    // Success message with improved formatting
-                    const successMessage = `
-connected 
-                    `;
-
-                    await Qr_Code_By_Ibrahim_Adams.sendMessage(
-                        Qr_Code_By_Ibrahim_Adams.user.id, 
-                        { text: successMessage }
-                    );
-
-                    // Clean up
-                    await delay(500);
-                    await Qr_Code_By_Ibrahim_Adams.ws.close();
-                    return removeFile(`./temp/${id}`);
-                } 
-                
-                if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
-                    await delay(10000);
-                    return BWM_XMD_QR_CODE();
-                }
-            });
-        } catch (err) {
-            console.error("Session error:", err);
-            if (!res.headersSent) {
-                res.status(500).json({ error: "Service unavailable", details: err.message });
-            }
-            removeFile(`./temp/${id}`);
-        }
+    if (!fs.existsSync(path.join(__dirname, 'temp'))) {
+        fs.mkdirSync(path.join(__dirname, 'temp'));
     }
 
-    return BWM_XMD_QR_CODE();
+    try {
+        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+        
+        const sock = makeWASocket({
+            auth: {
+                creds: state.creds,
+                keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: "fatal" })),
+            },
+            printQRInTerminal: false,
+            logger: pino({ level: "fatal" }),
+            browser: Browsers.macOS("Desktop")
+        });
+
+        sock.ev.on('creds.update', saveCreds);
+        
+        sock.ev.on("connection.update", async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+
+            if (qr) {
+                try {
+                    const qrImage = await QRCode.toDataURL(qr);
+                    res.send(`<img src="${qrImage}" alt="QR Code" />`);
+                } catch (error) {
+                    console.error("QR generation error:", error);
+                    res.status(500).send("Error generating QR code");
+                    removeFile(sessionDir);
+                }
+                return;
+            }
+
+            if (connection === "open") {
+                try {
+                    await delay(3000);
+
+                    // Read and prepare session data
+                    const credsPath = path.join(sessionDir, 'creds.json');
+                    if (!fs.existsSync(credsPath)) {
+                        throw new Error("Credentials file not found");
+                    }
+
+                    const data = fs.readFileSync(credsPath);
+                    const compressedData = compressSessionData(data);
+                    const b64data = compressedData.toString('base64');
+                    const sessionData = `KEITH;;;${b64data}`;
+
+                    // Send session data to user
+                    await sock.sendMessage(sock.user.id, { text: sessionData });
+
+                    // Send media content
+                    await sock.sendMessage(sock.user.id, { 
+                        video: { url: getRandomItem(mediaContent.videoUrls) },
+                        caption: getRandomItem(mediaContent.factsAndQuotes)
+                    });
+
+                    await sock.sendMessage(sock.user.id, {
+                        audio: { url: getRandomItem(mediaContent.audioUrls) },
+                        mimetype: 'audio/mp4',
+                        ptt: true,
+                        contextInfo: {
+                            mentionedJid: [sock.user.id],
+                            externalAdReply: {
+                                title: 'Thanks for choosing 𝗞𝗲𝗶𝘁𝗵 𝗦𝘂𝗽𝗽𝗼𝗿𝘁',
+                                body: 'Regards Keithkeizzah',
+                                thumbnailUrl: 'https://i.imgur.com/vTs9acV.jpeg',
+                                sourceUrl: 'https://whatsapp.com/channel/0029Vaan9TF9Bb62l8wpoD47',
+                                mediaType: 1,
+                                renderLargerThumbnail: true,
+                            },
+                        },
+                    });
+
+                    // Clean up
+                    await delay(100);
+                    await sock.ws.close();
+                    removeFile(sessionDir);
+                    
+                } catch (error) {
+                    console.error("Session handling error:", error);
+                    removeFile(sessionDir);
+                    if (!res.headersSent) {
+                        res.status(500).json({ error: "Session processing failed" });
+                    }
+                }
+            } 
+            else if (connection === "close") {
+                const shouldReconnect = lastDisconnect.error?.output?.statusCode !== 401;
+                if (shouldReconnect) {
+                    removeFile(sessionDir);
+                }
+            }
+        });
+    } catch (error) {
+        console.error("Initialization error:", error);
+        removeFile(sessionDir);
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Service initialization failed" });
+        }
+    }
 });
 
 module.exports = router;
