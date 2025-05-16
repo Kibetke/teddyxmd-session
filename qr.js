@@ -1,160 +1,87 @@
-const zlib = require('zlib');
 const QRCode = require('qrcode');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-const router = express.Router();
+let router = express.Router();
 const pino = require("pino");
 const { 
-    default: makeWASocket, 
+    default: Ibrahim_Adams, 
     useMultiFileAuthState, 
     Browsers, 
-    delay,
-    makeCacheableSignalKeyStore
+    delay 
 } = require("@whiskeysockets/baileys");
 
-// Media content arrays
-const mediaContent = {
-    audioUrls: [
-        "https://files.catbox.moe/hpwsi2.mp3",
-        "https://files.catbox.moe/xci982.mp3",
-        "https://files.catbox.moe/utbujd.mp3",
-    ],
-    videoUrls: [
-        "https://i.imgur.com/Zuun5CJ.mp4",
-        "https://i.imgur.com/tz9u2RC.mp4",
-        "https://i.imgur.com/W7dm6hG.mp4",
-    ],
-    factsAndQuotes: [
-        "The only way to do great work is to love what you do. - Steve Jobs",
-        "Success is not final, failure is not fatal: It is the courage to continue that counts. - Winston Churchill",
-    ]
-};
-
-// Helper functions
-const getRandomItem = (array) => array[Math.floor(Math.random() * array.length)];
-
-const removeFile = (filePath) => {
-    if (fs.existsSync(filePath)) {
-        fs.rmSync(filePath, { recursive: true, force: true });
-    }
-};
-
-const compressSessionData = (data) => {
-    try {
-        return zlib.gzipSync(data);
-    } catch (error) {
-        console.error("Compression error:", error);
-        throw new Error("Failed to compress session data");
-    }
-};
+function removeFile(FilePath) {
+    if (!fs.existsSync(FilePath)) return false;
+    fs.rmSync(FilePath, { recursive: true, force: true });
+}
 
 router.get('/', async (req, res) => {
-    const sessionId = Date.now().toString();
-    const sessionDir = path.join(__dirname, 'temp', sessionId);
+    const id = Date.now().toString(); // Use timestamp-based unique ID
+    async function BWM_XMD_QR_CODE() {
+        const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
+        try {
+            let Qr_Code_By_Ibrahim_Adams = Ibrahim_Adams({
+                auth: state,
+                printQRInTerminal: false,
+                logger: pino({ level: "silent" }),
+                browser: Browsers.macOS("Desktop"),
+            });
 
-    if (!fs.existsSync(path.join(__dirname, 'temp'))) {
-        fs.mkdirSync(path.join(__dirname, 'temp'));
-    }
+            Qr_Code_By_Ibrahim_Adams.ev.on('creds.update', saveCreds);
+            Qr_Code_By_Ibrahim_Adams.ev.on("connection.update", async (s) => {
+                const { connection, lastDisconnect, qr } = s;
 
-    try {
-        const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-        
-        const sock = makeWASocket({
-            auth: {
-                creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino().child({ level: "fatal" })),
-            },
-            printQRInTerminal: false,
-            logger: pino({ level: "fatal" }),
-            browser: Browsers.macOS("Desktop")
-        });
-
-        sock.ev.on('creds.update', saveCreds);
-        
-        sock.ev.on("connection.update", async (update) => {
-            const { connection, lastDisconnect, qr } = update;
-
-            if (qr) {
-                try {
+                if (qr) {
+                    // Send QR code as an image response
                     const qrImage = await QRCode.toDataURL(qr);
-                    res.send(`<img src="${qrImage}" alt="QR Code" />`);
-                } catch (error) {
-                    console.error("QR generation error:", error);
-                    res.status(500).send("Error generating QR code");
-                    removeFile(sessionDir);
+                    return res.send(`<img src="${qrImage}" alt="QR Code" />`);
                 }
-                return;
-            }
 
-            if (connection === "open") {
-                try {
-                    await delay(3000);
+                if (connection === "open") {
+                    await delay(5000);
 
-                    // Read and prepare session data
-                    const credsPath = path.join(sessionDir, 'creds.json');
-                    if (!fs.existsSync(credsPath)) {
-                        throw new Error("Credentials file not found");
-                    }
+                    let data = fs.readFileSync(path.join(__dirname, `/temp/${id}/creds.json`));
+                    await delay(800);
+                    let b64data = Buffer.from(data).toString('base64');
+                    let sessionData = `BWM_XMD_SESSION:::${b64data}`;
 
-                    const data = fs.readFileSync(credsPath);
-                    const compressedData = compressSessionData(data);
-                    const b64data = compressedData.toString('base64');
-                    const sessionData = `KEITH;;;${b64data}`;
+                    // Send session data
+                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: sessionData });
 
-                    // Send session data to user
-                    await sock.sendMessage(sock.user.id, { text: sessionData });
+                    // Cool new message
+                    let BWM_XMD_TEXT = `
+🌟 *Session Connected!* 🌟  
+  
+- 🚀 Stay updated with new bot features!  
+- 🔗 Get support and explore more:  
+   - Github: _https://github.com/ibrahimaitech_  
+   - Website: _https://www.ibrahimadams.site_  
+   - Whatsappchannel: _https://whatsapp.com/channel/0029VaZuGSxEawdxZK9CzM0Y_
+   
+😎 _Made with ❤️ by Ibrahim Adams_
+`;
 
-                    // Send media content
-                    await sock.sendMessage(sock.user.id, { 
-                        video: { url: getRandomItem(mediaContent.videoUrls) },
-                        caption: getRandomItem(mediaContent.factsAndQuotes)
-                    });
+                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: BWM_XMD_TEXT });
 
-                    await sock.sendMessage(sock.user.id, {
-                        audio: { url: getRandomItem(mediaContent.audioUrls) },
-                        mimetype: 'audio/mp4',
-                        ptt: true,
-                        contextInfo: {
-                            mentionedJid: [sock.user.id],
-                            externalAdReply: {
-                                title: 'Thanks for choosing 𝗞𝗲𝗶𝘁𝗵 𝗦𝘂𝗽𝗽𝗼𝗿𝘁',
-                                body: 'Regards Keithkeizzah',
-                                thumbnailUrl: 'https://i.imgur.com/vTs9acV.jpeg',
-                                sourceUrl: 'https://whatsapp.com/channel/0029Vaan9TF9Bb62l8wpoD47',
-                                mediaType: 1,
-                                renderLargerThumbnail: true,
-                            },
-                        },
-                    });
-
-                    // Clean up
                     await delay(100);
-                    await sock.ws.close();
-                    removeFile(sessionDir);
-                    
-                } catch (error) {
-                    console.error("Session handling error:", error);
-                    removeFile(sessionDir);
-                    if (!res.headersSent) {
-                        res.status(500).json({ error: "Session processing failed" });
-                    }
+                    await Qr_Code_By_Ibrahim_Adams.ws.close();
+                    return await removeFile('./temp/' + id);
+                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
+                    await delay(10000);
+                    BWM_XMD_QR_CODE();
                 }
-            } 
-            else if (connection === "close") {
-                const shouldReconnect = lastDisconnect.error?.output?.statusCode !== 401;
-                if (shouldReconnect) {
-                    removeFile(sessionDir);
-                }
+            });
+        } catch (err) {
+            if (!res.headersSent) {
+                await res.json({ code: "Service is Currently Unavailable" });
             }
-        });
-    } catch (error) {
-        console.error("Initialization error:", error);
-        removeFile(sessionDir);
-        if (!res.headersSent) {
-            res.status(500).json({ error: "Service initialization failed" });
+            console.log(err);
+            await removeFile('./temp/' + id);
         }
     }
+
+    return await BWM_XMD_QR_CODE();
 });
 
 module.exports = router;
