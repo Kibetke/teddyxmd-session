@@ -53,11 +53,11 @@ async function handlePairing(req, res) {
         const client = WhatsAppClient({
             auth: {
                 creds: state.creds,
-                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
+                keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "silent" })),
             },
             printQRInTerminal: false,
-            logger: pino({ level: "fatal" }),
-            browser: Browsers.macOS('Safari') // Changed to MacOS Safari
+            logger: pino({ level: "silent" }),
+            browser: Browsers.macOS('Desktop') // Changed to MacOS Safari
         });
 
         if (!client.authState.creds.registered) {
