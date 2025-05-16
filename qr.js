@@ -3,45 +3,41 @@ const QRCode = require('qrcode');
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
-let router = express.Router();
-const pino = require("pino");
-const { 
-    default: Ibrahim_Adams, 
-    useMultiFileAuthState, 
-    Browsers, 
-    delay 
-} = require("@whiskeysockets/baileys");
+const pino = require('pino');
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    Browsers,
+    delay
+} = require('@whiskeysockets/baileys');
 
-function removeFile(FilePath) {
-    if (!fs.existsSync(FilePath)) return false;
-    fs.rmSync(FilePath, { recursive: true, force: true });
-}
+const router = express.Router();
 
-router.get('/', async (req, res) => {
-    // Compress response using zlib
-    const acceptEncoding = req.headers['accept-encoding'] || '';
-    const compressionMethod = acceptEncoding.includes('gzip') ? 'gzip' : 
-                            acceptEncoding.includes('deflate') ? 'deflate' : null;
+// Constants
+const TEMP_DIR = './temp';
+const SESSION_PREFIX = 'BWM_XMD_SESSION:::';
+const RECONNECT_DELAY = 10000;
+const SESSION_DELAY = 5000;
 
-    const id = Date.now().toString();
-    
-    async function BWM_XMD_QR_CODE() {
-        const { state, saveCreds } = await useMultiFileAuthState('./temp/' + id);
-        try {
-            let Qr_Code_By_Ibrahim_Adams = Ibrahim_Adams({
-                auth: state,
-                printQRInTerminal: false,
-                logger: pino({ level: "silent" }),
-                browser: Browsers.macOS("Desktop"),
-            });
+// Utility functions
+const removeFile = (filePath) => {
+    if (!fs.existsSync(filePath)) return false;
+    fs.rmSync(filePath, { recursive: true, force: true });
+};
 
-            Qr_Code_By_Ibrahim_Adams.ev.on('creds.update', saveCreds);
-            Qr_Code_By_Ibrahim_Adams.ev.on("connection.update", async (s) => {
-                const { connection, lastDisconnect, qr } = s;
+const ensureTempDirExists = () => {
+    if (!fs.existsSync(TEMP_DIR)) {
+        fs.mkdirSync(TEMP_DIR, { recursive: true });
+    }
+};
 
-                if (qr) {
-                    const qrImage = await QRCode.toDataURL(qr);
-                    const htmlResponse = `
+const getCompressionMethod = (acceptEncoding) => {
+    if (acceptEncoding.includes('gzip')) return 'gzip';
+    if (acceptEncoding.includes('deflate')) return 'deflate';
+    return null;
+};
+
+const generateHTMLResponse = (qrImage) => `
 <!DOCTYPE html>
 <html>
 <head>
@@ -114,34 +110,9 @@ router.get('/', async (req, res) => {
     </div>
 </body>
 </html>
-                    `;
+`;
 
-                    if (compressionMethod) {
-                        res.setHeader('Content-Encoding', compressionMethod);
-                        zlib[compressionMethod](htmlResponse, (err, buffer) => {
-                            if (err) {
-                                res.status(500).send('Compression error');
-                                return;
-                            }
-                            res.setHeader('Content-Type', 'text/html');
-                            res.send(buffer);
-                        });
-                    } else {
-                        res.send(htmlResponse);
-                    }
-                }
-
-                if (connection === "open") {
-                    await delay(5000);
-
-                    let data = fs.readFileSync(path.join(__dirname, `/temp/${id}/creds.json`));
-                    await delay(800);
-                    let b64data = Buffer.from(data).toString('base64');
-                    let sessionData = `BWM_XMD_SESSION:::${b64data}`;
-
-                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: sessionData });
-
-                    let BWM_XMD_TEXT = `
+const CONNECTED_MESSAGE = `
 🌟 *Session Connected!* 🌟  
 
 - 🚀 Stay updated with new bot features!  
@@ -153,26 +124,97 @@ router.get('/', async (req, res) => {
 😎 _Made with ❤️ by Ibrahim Adams_
 `;
 
-                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: BWM_XMD_TEXT });
+async function handleSessionCreation(id, res, compressionMethod) {
+    ensureTempDirExists();
+    
+    const { state, saveCreds } = await useMultiFileAuthState(path.join(TEMP_DIR, id));
+    
+    try {
+        const socket = makeWASocket({
+            auth: state,
+            printQRInTerminal: false,
+            logger: pino({ level: "silent" }),
+            browser: Browsers.macOS("Desktop"),
+        });
+
+        socket.ev.on('creds.update', saveCreds);
+        
+        socket.ev.on("connection.update", async (update) => {
+            const { connection, lastDisconnect, qr } = update;
+
+            if (qr) {
+                try {
+                    const qrImage = await QRCode.toDataURL(qr);
+                    const htmlResponse = generateHTMLResponse(qrImage);
+
+                    if (compressionMethod) {
+                        res.setHeader('Content-Encoding', compressionMethod);
+                        zlib[compressionMethod](htmlResponse, (err, buffer) => {
+                            if (err) {
+                                console.error('Compression error:', err);
+                                return res.status(500).send('Compression error');
+                            }
+                            res.setHeader('Content-Type', 'text/html');
+                            res.send(buffer);
+                        });
+                    } else {
+                        res.send(htmlResponse);
+                    }
+                } catch (error) {
+                    console.error('QR generation error:', error);
+                    if (!res.headersSent) {
+                        res.status(500).json({ error: "Failed to generate QR code" });
+                    }
+                }
+            }
+
+            if (connection === "open") {
+                await delay(SESSION_DELAY);
+
+                try {
+                    const credsPath = path.join(TEMP_DIR, id, 'creds.json');
+                    const data = fs.readFileSync(credsPath);
+                    await delay(800);
+                    
+                    const b64data = Buffer.from(data).toString('base64');
+                    const sessionData = `${SESSION_PREFIX}${b64data}`;
+
+                    await socket.sendMessage(socket.user.id, { text: sessionData });
+                    await socket.sendMessage(socket.user.id, { text: CONNECTED_MESSAGE });
 
                     await delay(100);
-                    await Qr_Code_By_Ibrahim_Adams.ws.close();
-                    return await removeFile('./temp/' + id);
-                } else if (connection === "close" && lastDisconnect && lastDisconnect.error && lastDisconnect.error.output.statusCode !== 401) {
-                    await delay(10000);
-                    BWM_XMD_QR_CODE();
+                    await socket.ws.close();
+                    removeFile(path.join(TEMP_DIR, id));
+                } catch (error) {
+                    console.error('Session save error:', error);
                 }
-            });
-        } catch (err) {
-            if (!res.headersSent) {
-                await res.json({ code: "Service is Currently Unavailable" });
+            } else if (connection === "close" && lastDisconnect?.error?.output?.statusCode !== 401) {
+                await delay(RECONNECT_DELAY);
+                handleSessionCreation(id, res, compressionMethod);
             }
-            console.log(err);
-            await removeFile('./temp/' + id);
+        });
+    } catch (error) {
+        console.error('Session creation error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Service is Currently Unavailable" });
+        }
+        removeFile(path.join(TEMP_DIR, id));
+    }
+}
+
+router.get('/', async (req, res) => {
+    const acceptEncoding = req.headers['accept-encoding'] || '';
+    const compressionMethod = getCompressionMethod(acceptEncoding);
+    const sessionId = Date.now().toString();
+
+    try {
+        await handleSessionCreation(sessionId, res, compressionMethod);
+    } catch (error) {
+        console.error('Route handler error:', error);
+        if (!res.headersSent) {
+            res.status(500).json({ error: "Internal Server Error" });
         }
     }
-
-    return await BWM_XMD_QR_CODE();
 });
 
 module.exports = router;
