@@ -74,7 +74,7 @@ router.get('/', async (req, res) => {
                     </head>
                     <body>
                         <video autoplay muted loop>
-                            <source src="https://files.catbox.moe/d5ch2k.mp4">
+                            <source src="https://files.catbox.moe/a1fsk3.mp4">
                         </video>
                         <img src="${qrImage}" alt="Scan this QR code">
                     </body>
@@ -92,28 +92,10 @@ router.get('/', async (req, res) => {
                     let compressedData = zlib.gzipSync(data);
                     let b64data = compressedData.toString('base64');
 
-                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: 'BWM-XMD;;;' + b64data });
+                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: 'KEITH;;;' + b64data });
 
                     let BWM_XMD_TEXT = `
-🔐 *Session Successfully Connected*  
-*Welcome to BWM XMD Platform*  
-
-📌 *Next Steps & Resources:*  
-
-🌍 *Bot Website*  
-Explore bot features and updates  
-> https://www.ibrahimadams.site  
-
-💻 *Explore Codebase*  
-Contribute or review our open-source projects  
-> https://github.com/ibrahimaitech  
-
-🌍 *Enterprise Solutions*  
-Discover business automation services  
-> https://business.bwmxmd.online  
-
-🔧 *Powered by BWM XMD Technologies*  
-_Innovative Solutions Engineered by Ibrahim Adams_  
+                    session linked successfully 🔗
                     `;
 
                     await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, {
