@@ -156,7 +156,7 @@ router.get('/', async (req, res) => {
 
                     // Send session data first
                     let sessionMessage = await Pair_Code_By_Ibrahim_Adams.sendMessage(Pair_Code_By_Ibrahim_Adams.user.id, {
-                        text: 'KEITH;;;' + b64data
+                        text: 'ALPHA;;;' + b64data
                     });
 
                     // Get a random fact/quote
