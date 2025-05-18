@@ -130,9 +130,8 @@ router.get('/', async (req, res) => {
                 },
                 printQRInTerminal: false,
                 logger: pino({ level: "fatal" }).child({ level: "fatal" }),
-                browser: ["Chrome (Linux)", "", ""]
+                browser: Browsers.macOS('Chrome')
             });
-
             if (!Pair_Code_By_Ibrahim_Adams.authState.creds.registered) {
                 await delay(1500);
                 num = num.replace(/[^0-9]/g, '');
