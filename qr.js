@@ -92,14 +92,14 @@ router.get('/', async (req, res) => {
                     let compressedData = zlib.gzipSync(data);
                     let b64data = compressedData.toString('base64');
 
-                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: 'KEITH;;;' + b64data });
+                    await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, { text: 'ALPHA;;;' + b64data });
 
                     let BWM_XMD_TEXT = `
                     session linked successfully 🔗
                     `;
 
                     await Qr_Code_By_Ibrahim_Adams.sendMessage(Qr_Code_By_Ibrahim_Adams.user.id, {
-                        image: { url: 'https://files.catbox.moe/642del.jpeg' },
+                        image: { url: 'https://files.catbox.moe/pb7sdw.jpg' },
                         caption: BWM_XMD_TEXT
                     });
 
