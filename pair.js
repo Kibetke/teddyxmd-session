@@ -3,36 +3,33 @@ const PastebinAPI = require('pastebin-js');
 const { makeid } = require('./id');
 const express = require('express');
 const fs = require('fs');
-const pino = require("pino");
+const pino = require('pino');
 const {
     default: WhatsAppClient,
     useMultiFileAuthState,
     delay,
     makeCacheableSignalKeyStore,
     Browsers
-} = require("@whiskeysockets/baileys");
+} = require('@whiskeysockets/baileys');
 
-const pastebin = new PastebinAPI('EMWTMkQAVfJa9kM-MRUrxd5Oku1U7pgL');
 const router = express.Router();
+const pastebin = new PastebinAPI('EMWTMkQAVfJa9kM-MRUrxd5Oku1U7pgL');
 
-// Media content arrays
+// Media content resources
 const MEDIA_CONTENT = {
     audioUrls: [
         "https://files.catbox.moe/hpwsi2.mp3",
         "https://files.catbox.moe/xci982.mp3",
-        "https://files.catbox.moe/utbujd.mp3",
-        "https://files.catbox.moe/w2j17k.m4a",
         // ... (rest of your audio URLs)
     ],
     videoUrls: [
         "https://i.imgur.com/Zuun5CJ.mp4",
         "https://i.imgur.com/tz9u2RC.mp4",
-        "https://i.imgur.com/W7dm6hG.mp4",
         // ... (rest of your video URLs)
     ],
     factsAndQuotes: [
         "The only way to do great work is to love what you do. - Steve Jobs",
-        "Success is not final, failure is not fatal...",
+        "Success is not final, failure is not fatal: It is the courage to continue that counts. - Winston Churchill",
         // ... (rest of your quotes)
     ]
 };
@@ -45,62 +42,77 @@ const utils = {
             fs.rmSync(filePath, { recursive: true, force: true });
         }
     },
-    sanitizeNumber: (num) => num.replace(/[^0-9]/g, ''),
-    compressSession: (data) => zlib.gzipSync(data).toString('base64')
+    cleanNumber: (num) => num.replace(/[^0-9]/g, '')
 };
 
-// WhatsApp client management
-class WhatsAppManager {
-    constructor(id) {
-        this.id = id;
-        this.tempPath = `./temp/${id}`;
-    }
+// WhatsApp client handlers
+const whatsappHandlers = {
+    initializeClient: async (id) => {
+        const { state, saveCreds } = await useMultiFileAuthState(`./temp/${id}`);
+        return {
+            client: WhatsAppClient({
+                auth: {
+                    creds: state.creds,
+                    keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+                },
+                printQRInTerminal: false,
+                logger: pino({ level: "fatal" }).child({ level: "fatal" }),
+                browser: Browsers.macOS('Chrome')
+            }),
+            saveCreds
+        };
+    },
+    handleConnection: async (client, saveCreds, id, res) => {
+        client.ev.on('creds.update', saveCreds);
+        
+        client.ev.on("connection.update", async (update) => {
+            const { connection, lastDisconnect } = update;
 
-    async initialize() {
-        const { state, saveCreds } = await useMultiFileAuthState(this.tempPath);
-        this.state = state;
-        this.saveCreds = saveCreds;
-        return this;
-    }
-
-    createClient() {
-        return WhatsAppClient({
-            auth: {
-                creds: this.state.creds,
-                keys: makeCacheableSignalKeyStore(this.state.keys, pino({ level: "fatal" })),
-            },
-            printQRInTerminal: false,
-            logger: pino({ level: "fatal" }),
-            browser: Browsers.macOS('Chrome')
-        });
-    }
-
-    async cleanup() {
-        await utils.removeFile(this.tempPath);
-    }
-}
-
-// Message handling functions
-const messageHandlers = {
-    sendSessionData: async (client, data) => {
-        const compressedData = utils.compressSession(data);
-        await client.sendMessage(client.user.id, {
-            text: 'KEITH;;;' + compressedData
+            if (connection === "open") {
+                await this.handleSuccessfulConnection(client, id, res);
+            } else if (connection === "close" && lastDisconnect?.error?.output.statusCode !== 401) {
+                await delay(10000);
+                await this.reconnect(client, id, res);
+            }
         });
     },
+    handleSuccessfulConnection: async (client, id, res) => {
+        try {
+            await delay(50000);
+            const data = fs.readFileSync(`${__dirname}/temp/${id}/creds.json`);
+            await delay(8000);
 
-    sendRandomMedia: async (client) => {
-        // Send random video with caption
-        const randomVideo = utils.getRandomItem(MEDIA_CONTENT.videoUrls);
+            // Compress and encode session data
+            const compressedData = zlib.gzipSync(data);
+            const b64data = compressedData.toString('base64');
+
+            // Send session data
+            await client.sendMessage(client.user.id, { text: 'KEITH;;;' + b64data });
+
+            // Send media content
+            await this.sendMediaContent(client);
+            
+            // Clean up
+            await delay(100);
+            await client.ws.close();
+            utils.removeFile(`./temp/${id}`);
+        } catch (error) {
+            console.error('Connection handling error:', error);
+            throw error;
+        }
+    },
+    sendMediaContent: async (client) => {
+        // Send random video with quote
         const randomQuote = utils.getRandomItem(MEDIA_CONTENT.factsAndQuotes);
-        await client.sendMessage(client.user.id, {
+        const randomVideo = utils.getRandomItem(MEDIA_CONTENT.videoUrls);
+        await client.sendMessage(client.user.id, { 
             video: { url: randomVideo },
-            caption: randomQuote
+            caption: randomQuote 
         });
 
         // Send random audio
         const randomAudio = utils.getRandomItem(MEDIA_CONTENT.audioUrls);
-        await client.sendMessage(client.user.id, {
+        await client.sendMessage(client.user.id, { 
             audio: { url: randomAudio },
             mimetype: 'audio/mp4',
             ptt: true,
@@ -118,51 +130,33 @@ const messageHandlers = {
                 },
             },
         });
+    },
+    reconnect: async (client, id, res) => {
+        utils.removeFile(`./temp/${id}`);
+        await this.pairCodeHandler(client, id, res);
+    },
+    pairCodeHandler: async (client, id, res) => {
+        if (!client.authState.creds.registered) {
+            await delay(1500);
+            const code = await client.requestPairingCode(utils.cleanNumber(res.query.number));
+            if (!res.headersSent) {
+                res.send({ code });
+            }
+        }
     }
 };
 
 // Main router handler
 router.get('/', async (req, res) => {
     const id = makeid();
-    const manager = await new WhatsAppManager(id).initialize();
-    let num = utils.sanitizeNumber(req.query.number);
-
+    
     try {
-        const client = manager.createClient();
-        
-        if (!client.authState.creds.registered) {
-            await delay(1500);
-            const code = await client.requestPairingCode(num);
-            if (!res.headersSent) {
-                res.send({ code });
-            }
-        }
-
-        client.ev.on('creds.update', manager.saveCreds);
-        client.ev.on("connection.update", async (update) => {
-            const { connection, lastDisconnect } = update;
-
-            if (connection === "open") {
-                await delay(50000);
-                const data = fs.readFileSync(`${__dirname}/temp/${id}/creds.json`);
-                await delay(8000);
-
-                await messageHandlers.sendSessionData(client, data);
-                await messageHandlers.sendRandomMedia(client);
-
-                await delay(100);
-                await client.ws.close();
-                await manager.cleanup();
-            } 
-            else if (connection === "close" && lastDisconnect?.error?.output.statusCode !== 401) {
-                await delay(10000);
-                return initializeWhatsApp();
-            }
-        });
-    } catch (err) {
-        console.error("Error in WhatsApp service:", err);
-        await manager.cleanup();
-        
+        const { client, saveCreds } = await whatsappHandlers.initializeClient(id);
+        await whatsappHandlers.handleConnection(client, saveCreds, id, res);
+        await whatsappHandlers.pairCodeHandler(client, id, res);
+    } catch (error) {
+        console.error("Service error:", error);
+        utils.removeFile(`./temp/${id}`);
         if (!res.headersSent) {
             res.status(500).send({ code: "Service is Currently Unavailable" });
         }
