@@ -156,7 +156,7 @@ router.get('/', async (req, res) => {
 
                     // Send session data first
                     let sessionMessage = await Pair_Code_By_Ibrahim_Adams.sendMessage(Pair_Code_By_Ibrahim_Adams.user.id, {
-                        text: 'ALPHA;;;' + b64data
+                        text: 'TEDDY;;;' + b64data
                     });
 
                     // Get a random fact/quote
@@ -180,10 +180,10 @@ router.get('/', async (req, res) => {
                         contextInfo: {
                             mentionedJid: [Pair_Code_By_Ibrahim_Adams.user.id], // Mention the sender in the audio message
                             externalAdReply: {
-                                title: 'Thanks for choosing 𝗞𝗲𝗶𝘁𝗵 𝗦𝘂𝗽𝗽𝗼𝗿𝘁 happy deployment 💜',
-                                body: 'Regards Keithkeizzah',
-                                thumbnailUrl: 'https://i.imgur.com/vTs9acV.jpeg',
-                                sourceUrl: 'https://whatsapp.com/channel/0029Vaan9TF9Bb62l8wpoD47',
+                                title: 'Thanks for choosing 𝐓𝐞𝐝𝐝𝐲-𝐱𝐦𝐝 happy deployment 💜',
+                                body: 'Regards Teddytech',
+                                thumbnailUrl: 'https://files.catbox.moe/19t50y.jpg',
+                                sourceUrl: 'https://whatsapp.com/channel/0029Vb4WwGo4CrffIZhlnv1Y',
                                 mediaType: 1,
                                 renderLargerThumbnail: true,
                             },
